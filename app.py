@@ -1,13 +1,83 @@
-import requests
 import streamlit as st
 
-st.title("💬 명언 API 테스트")
+st.set_page_config(
+    page_title="나와 어울리는 영화는?",
+    page_icon="🎬",
+    layout="centered"
+)
 
-if st.button("오늘의 명언 가져오기"):
-    # ZenQuotes API로 랜덤 명언 가져오기
-    response = requests.get("https://zenquotes.io/api/random")
-    data = response.json()
-    
-    st.success("💬 오늘의 명언")
-    st.write(f"\"{data[0]['q']}\"")
-    st.write(f"- {data[0]['a']}")
+# 제목 & 소개
+st.title("🎬 나와 어울리는 영화는?")
+st.write("간단한 질문 5개로 당신의 영화 취향을 알아보는 심리테스트입니다.")
+st.caption("솔직하게 답해보세요! 결과 분석은 다음 단계에서 진행돼요 👀")
+
+st.divider()
+
+# 질문 데이터
+questions = [
+    {
+        "q": "Q1. 시험이 끝난 금요일 밤, 당신의 선택은?",
+        "options": [
+            "좋아하는 사람이나 친구와 조용히 대화하며 하루를 마무리한다",
+            "바로 약속 잡고 밖으로 나가 뭔가 짜릿한 걸 한다",
+            "혼자만의 시간, 상상력 자극하는 콘텐츠에 푹 빠진다",
+            "웃긴 영상이나 예능 보면서 아무 생각 없이 쉰다",
+        ],
+    },
+    {
+        "q": "Q2. 새 학기 OT에서 당신이 가장 기대하는 순간은?",
+        "options": [
+            "새로운 사람들과 깊은 이야기를 나누게 되는 순간",
+            "레크리에이션이나 게임에서 팀을 이끌 때",
+            "독특한 사람들, 색다른 분위기를 발견할 때",
+            "예상치 못한 웃긴 상황이 터질 때",
+        ],
+    },
+    {
+        "q": "Q3. 스트레스를 받을 때, 당신의 해소 방법은?",
+        "options": [
+            "감정이 잘 드러나는 음악이나 이야기에 몰입한다",
+            "운동하거나 몸을 쓰는 활동으로 확 풀어버린다",
+            "게임, 웹소설, 세계관 있는 콘텐츠에 빠진다",
+            "친구랑 수다 떨거나 웃긴 걸 보며 털어낸다",
+        ],
+    },
+    {
+        "q": "Q4. 당신이 끌리는 주인공 유형은?",
+        "options": [
+            "현실적인 고민과 성장을 겪는 인물",
+            "위기 앞에서도 물러서지 않는 리더형 인물",
+            "특별한 능력이나 운명을 가진 인물",
+            "어딘가 허술하지만 정이 가는 인물",
+        ],
+    },
+    {
+        "q": "Q5. 영화가 끝난 후, 가장 만족스러울 때는?",
+        "options": [
+            "여운이 남아서 한동안 생각이 이어질 때",
+            "“와, 진짜 시원하다”라는 말이 절로 나올 때",
+            "세계관이나 설정을 곱씹게 될 때",
+            "명장면보다 명대사가 먼저 떠오를 때",
+        ],
+    },
+]
+
+# 세션 상태 초기화
+if "answers" not in st.session_state:
+    st.session_state["answers"] = {}
+
+# 질문 출력
+for idx, item in enumerate(questions, start=1):
+    key = f"q{idx}"
+    st.session_state["answers"][key] = st.radio(
+        item["q"],
+        item["options"],
+        key=key
+    )
+    st.write("")
+
+st.divider()
+
+# 결과 버튼
+if st.button("결과 보기", type="primary"):
+    st.subheader("🔍 분석 중...")
