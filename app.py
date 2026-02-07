@@ -1,158 +1,97 @@
+import os
 import streamlit as st
-import requests
+from openai import OpenAI
 
-# -----------------------------
-# 기본 설정
-# -----------------------------
-st.set_page_config(page_title="🎬 나와 어울리는 영화는?", layout="centered")
+# ----------------------------
+# Config
+# ----------------------------
+DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.2")  # 계정/권한에 맞게 바꾸세요.
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-TMDB_BASE_URL = "https://api.themoviedb.org/3"
-POSTER_BASE_URL = "https://image.tmdb.org/t/p/w500"
+SYSTEM_PROMPT = """너는 계획을 잘게 쪼개는 보조 도구다.
 
-GENRE_IDS = {
-    "로맨스/드라마": [18, 10749],
-    "액션/어드벤처": [28],
-    "SF/판타지": [878, 14],
-    "코미디": [35],
-}
+사용자가 입력한 목표를 “오늘 당장 시작할 수 있는 아주 작은 행동 1개”로 바꿔라.
 
-CHOICE_TO_GENRE = {
-    "A": "로맨스/드라마",
-    "B": "액션/어드벤처",
-    "C": "SF/판타지",
-    "D": "코미디",
-}
+조건:
+1. 행동은 5~10분 이내에 끝낼 수 있어야 한다.
+2. 특별한 준비물이나 전문 지식이 없어야 한다.
+3. 실패할 가능성이 매우 낮아야 한다.
+4. 계획 전체가 아니라 ‘첫 행동’만 제안해야 한다.
+5. 설명은 하지 말고, 행동만 한 문장으로 제시하라.
+"""
 
-PRIORITY = ["로맨스/드라마", "액션/어드벤처", "SF/판타지", "코미디"]
+def generate_micro_action(goal: str, model: str) -> str:
+    """Call OpenAI and return a single-sentence action."""
+    resp = client.responses.create(
+        model=model,
+        input=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f'목표: "{goal}"'}
+        ],
+    )
+    # openai-python responses 객체는 output_text()로 텍스트를 간단히 뽑을 수 있습니다.
+    # (문서/예제 참고)
+    return (resp.output_text() or "").strip()
 
-# -----------------------------
-# 사이드바
-# -----------------------------
-st.sidebar.header("🔑 TMDB API 설정")
-api_key = st.sidebar.text_input("TMDB API Key", type="password")
-
-# -----------------------------
+# ----------------------------
 # UI
-# -----------------------------
-st.title("🎬 나와 어울리는 영화는?")
-st.write("질문 5개로 당신의 영화 취향을 분석하고 추천해드려요!")
+# ----------------------------
+st.set_page_config(page_title="2MIN PLAN", page_icon="✅", layout="wide")
+st.title("✅ 2MIN PLAN (MVP)")
+st.caption("큰 목표를 ‘오늘 당장 가능한 아주 작은 행동 1개’로 바꿔줍니다.")
 
-st.divider()
+# Sidebar (결과를 여기 띄움)
+st.sidebar.header("📌 오늘의 한 단계")
 
-questions = [
-    ("Q1. 시험이 끝난 금요일 밤, 당신의 선택은?", {
-        "A": "조용히 대화하며 마무리",
-        "B": "짜릿한 약속 잡기",
-        "C": "혼자 콘텐츠 몰입",
-        "D": "웃긴 영상 보기"
-    }),
-    ("Q2. 새 학기 OT에서 기대하는 순간은?", {
-        "A": "깊은 대화",
-        "B": "게임 리드",
-        "C": "색다른 분위기",
-        "D": "웃긴 상황"
-    }),
-    ("Q3. 스트레스 해소 방법은?", {
-        "A": "음악·이야기 몰입",
-        "B": "운동",
-        "C": "게임·세계관",
-        "D": "수다·웃음"
-    }),
-    ("Q4. 끌리는 주인공은?", {
-        "A": "현실적인 성장형",
-        "B": "리더형",
-        "C": "특별한 능력",
-        "D": "허술하지만 매력"
-    }),
-    ("Q5. 영화 후 만족 포인트는?", {
-        "A": "여운",
-        "B": "시원함",
-        "C": "세계관",
-        "D": "명대사"
-    }),
-]
+if "micro_action" not in st.session_state:
+    st.session_state.micro_action = "아직 생성된 행동이 없습니다."
+if "done" not in st.session_state:
+    st.session_state.done = False
 
-answers = {}
+# Main inputs
+with st.form("goal_form", clear_on_submit=False):
+    goal = st.text_input("큰 목표를 입력하세요", placeholder="예: 기말고사 공부 / 운동 시작 / 방 정리")
+    model = st.text_input("모델(선택)", value=DEFAULT_MODEL)
+    submitted = st.form_submit_button("계획 쪼개기")
 
-for i, (q, opts) in enumerate(questions, start=1):
-    choice = st.radio(q, [f"{k}. {v}" for k, v in opts.items()], key=f"q{i}")
-    answers[f"q{i}"] = choice.split(".")[0]
+if submitted:
+    if not os.getenv("OPENAI_API_KEY"):
+        st.error("OPENAI_API_KEY 환경변수가 설정되지 않았습니다.")
+    elif not goal.strip():
+        st.warning("목표를 입력해 주세요.")
+    else:
+        with st.spinner("아주 작은 행동을 만드는 중..."):
+            try:
+                micro = generate_micro_action(goal.strip(), model.strip())
+                if not micro:
+                    micro = "목표를 더 구체적으로 한 문장으로 적어주세요. (예: '기말고사 1과목 1단원 공부 시작')"
+                st.session_state.micro_action = micro
+                st.session_state.done = False
+            except Exception as e:
+                st.error(f"API 호출 오류: {e}")
 
-st.divider()
+# Sidebar output
+st.sidebar.success(st.session_state.micro_action)
 
-# -----------------------------
-# 분석 함수
-# -----------------------------
-def analyze(answers):
-    score = {k: 0 for k in GENRE_IDS}
-    evidence = {k: [] for k in GENRE_IDS}
+col1, col2 = st.columns([1, 1])
+with col1:
+    if st.button("✅ 완료"):
+        st.session_state.done = True
+with col2:
+    if st.button("🔄 다시 추천"):
+        # 같은 목표라도 다시 뽑고 싶을 때: 목표를 재제출하는 UX 대신 간단히 재호출
+        if goal.strip() and os.getenv("OPENAI_API_KEY"):
+            with st.spinner("다시 추천 중..."):
+                try:
+                    st.session_state.micro_action = generate_micro_action(goal.strip(), model.strip())
+                    st.session_state.done = False
+                except Exception as e:
+                    st.error(f"API 호출 오류: {e}")
 
-    for idx, v in enumerate(answers.values(), start=1):
-        genre = CHOICE_TO_GENRE[v]
-        score[genre] += 1
-        evidence[genre].append(idx)
+if st.session_state.done:
+    st.sidebar.info("좋습니다. 이 정도면 충분합니다 🙂")
 
-    max_score = max(score.values())
-    candidates = [k for k, v in score.items() if v == max_score]
-    winner = next(g for g in PRIORITY if g in candidates)
-
-    return winner, evidence
-
-# -----------------------------
-# TMDB 호출
-# -----------------------------
-def fetch_movies(api_key, genre_id):
-    url = f"{TMDB_BASE_URL}/discover/movie"
-    params = {
-        "api_key": api_key,
-        "with_genres": genre_id,
-        "language": "ko-KR",
-        "sort_by": "popularity.desc",
-        "include_adult": False,
-    }
-    res = requests.get(url, params=params, timeout=10)
-    return res.json().get("results", [])
-
-# -----------------------------
-# 결과
-# -----------------------------
-if st.button("결과 보기", type="primary"):
-    if not api_key:
-        st.error("TMDB API Key를 입력해주세요.")
-        st.stop()
-
-    with st.spinner("분석 중..."):
-        genre, evidence = analyze(answers)
-        genre_ids = GENRE_IDS[genre]
-
-        movies = []
-        seen = set()
-
-        for gid in genre_ids:
-            for m in fetch_movies(api_key, gid):
-                if m["id"] not in seen and m.get("poster_path"):
-                    movies.append(m)
-                    seen.add(m["id"])
-                if len(movies) >= 5:
-                    break
-            if len(movies) >= 5:
-                break
-
-    st.subheader("✅ 분석 결과")
-    st.write(f"당신에게 어울리는 장르는 **{genre}** 입니다!")
-
-    st.info(f"Q{', '.join(map(str, evidence[genre]))}에서 해당 성향이 두드러졌어요.")
-
-    st.divider()
-    st.subheader("🍿 추천 영화 TOP 5")
-
-    for m in movies:
-        cols = st.columns([1, 2])
-        with cols[0]:
-            st.image(POSTER_BASE_URL + m["poster_path"], use_container_width=True)
-        with cols[1]:
-            st.markdown(f"### {m['title']}")
-            st.write(f"⭐ 평점: {m['vote_average']}")
-            st.write(m["overview"] or "줄거리 정보 없음")
-            st.caption(f"💡 {genre} 감성과 잘 맞는 인기 작품이에요.")
-        st.divider()
+# Minimal “한계/고도화” 섹션(과제용)
+with st.expander("한계 및 고도화 방안(과제용)"):
+    st.write("- **한계**: AI 제안이 항상 사용자에게 최적이라고 보장할 수 없고, 현재는 사용자의 컨디션/과거 데이터 반영이 제한적입니다.")
+    st.write("- **고도화**: 완료/미완료 기록을 축적해 성공률이 높은 행동을 우선 추천하거나, 에너지 상태(피곤/보통/집중)에 따라 5/10/15분 버전으로 자동 조절할 수 있습니다.")
