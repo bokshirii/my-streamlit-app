@@ -1,5 +1,16 @@
 import streamlit as st
 from openai import OpenAI as OpenAIClient  # 이름 충돌 방지
+import streamlit as st
+import openai
+from openai import OpenAI as OpenAIClient
+
+st.write("DEBUG type(openai):", type(openai))
+st.write("DEBUG openai module file:", getattr(openai, "__file__", "NO_FILE"))
+st.write("DEBUG type(OpenAIClient):", type(OpenAIClient))
+st.write("DEBUG OpenAIClient repr:", OpenAIClient)
+
+# 여기서 멈춤 (원인 확인용)
+st.stop()
 
 MODEL_NAME = "gpt-4.1-mini"
 
